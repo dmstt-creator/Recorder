@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ضبط‌کننده صدای من</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+<style>
+:root{
+  --bg:#E9EEF0; --surface:#F7F9FA; --ink:#14313A; --muted:#5B7279;
+  --line:#C9D4D8; --rec:#D6402F; --accent:#0F7C78; --meter:#0F7C78;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1D22; --surface:#16282E; --ink:#E3ECEE; --muted:#93A9AF;
+    --line:#2A4249; --rec:#F05A47; --accent:#3FB8B2; --meter:#3FB8B2;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1D22; --surface:#16282E; --ink:#E3ECEE; --muted:#93A9AF;
+  --line:#2A4249; --rec:#F05A47; --accent:#3FB8B2; --meter:#3FB8B2;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Vazirmatn",Tahoma,"Segoe UI",sans-serif;line-height:1.7}
+main{max-width:34rem;margin:0 auto;padding:1.5rem 1.1rem 3rem}
+h1{font-size:1.35rem;font-weight:800;margin:0 0 .2rem}
+.sub{color:var(--muted);font-size:.9rem;margin:0 0 1.5rem}
+.deck{background:var(--surface);border:1px solid var(--line);border-radius:1.4rem;padding:1.6rem 1.2rem 1.3rem;text-align:center}
+.clock{font-variant-numeric:tabular-nums;direction:ltr;font-size:2.6rem;font-weight:300;letter-spacing:.02em;margin:0}
+.nextname{direction:ltr;font-weight:600;font-size:1.05rem;color:var(--accent);margin:.2rem 0 1.2rem;font-variant-numeric:tabular-nums}
+.btnwrap{position:relative;width:9.5rem;height:9.5rem;margin:0 auto 1rem}
+.ring{position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--meter) calc(var(--lvl,0)*1turn), var(--line) 0);transition:background .08s linear}
+.recbtn{position:absolute;inset:.55rem;border-radius:50%;border:none;background:var(--surface);cursor:pointer;display:grid;place-items:center;color:var(--ink);font:inherit}
+.recbtn:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.dot{width:3.4rem;height:3.4rem;border-radius:50%;background:var(--rec);transition:border-radius .2s,width .2s,height .2s}
+.recording .dot{width:2.6rem;height:2.6rem;border-radius:.5rem}
+.state{font-size:.95rem;color:var(--muted);margin:0 0 1rem;min-height:1.6em}
+.recording .state{color:var(--rec)}
+.row{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+.ghost{font:inherit;font-size:.9rem;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:.7rem;padding:.45rem .9rem;cursor:pointer}
+.ghost:disabled{opacity:.4;cursor:default}
+.ghost:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label.seg{display:flex;align-items:center;gap:.5rem;font-size:.9rem;color:var(--muted)}
+select{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:.6rem;padding:.3rem .5rem}
+h2{font-size:1rem;font-weight:600;margin:2rem 0 .6rem;display:flex;justify-content:space-between;align-items:center}
+ul{list-style:none;margin:0;padding:0}
+li.file{border-top:1px solid var(--line);padding:.8rem 0}
+li.file:last-child{border-bottom:1px solid var(--line)}
+.fname{direction:ltr;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.meta{color:var(--muted);font-size:.82rem}
+audio{width:100%;height:2.2rem;margin:.4rem 0}
+.actions{display:flex;gap:.5rem}
+.empty{color:var(--muted);font-size:.9rem;padding:1rem 0;border-top:1px solid var(--line)}
+.err{color:var(--rec);font-size:.88rem;margin-top:.8rem}
+@media (prefers-reduced-motion:reduce){.ring,.dot{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>ضبط‌کننده صدای من</h1>
+  <p class="sub">صدا ضبط می‌شود، هر یک ساعت یک فایل MP3 جدا ساخته می‌شود و نام هر فایل تاریخ و ساعت شمسی شروع آن است.</p>
+
+  <section class="deck" id="deck">
+    <p class="clock" id="elapsed">00:00:00</p>
+    <p class="nextname" id="nowname">—</p>
+    <div class="btnwrap">
+      <div class="ring" id="ring"></div>
+      <button class="recbtn" id="recbtn" aria-label="شروع ضبط"><span class="dot"></span></button>
+    </div>
+    <p class="state" id="state">برای شروع ضبط، دکمه را بزنید</p>
+    <div class="row">
+      <button class="ghost" id="splitbtn" disabled>شروع فایل جدید از همین لحظه</button>
+      <label class="seg">طول هر فایل
+        <select id="seglen">
+          <option value="60">۶۰ دقیقه</option>
+          <option value="30">۳۰ دقیقه</option>
+          <option value="15">۱۵ دقیقه</option>
+          <option value="1">۱ دقیقه (آزمایشی)</option>
+        </select>
+      </label>
+    </div>
+    <div class="err" id="err" hidden></div>
+  </section>
+
+  <h2><span>فایل‌های ضبط‌شده</span><span class="meta" id="count"></span></h2>
+  <ul id="list"></ul>
+</main>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const fa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+/* ---------- نام فایل بر اساس تاریخ شمسی ---------- */
+function jalaliName(date){
+  const parts = new Intl.DateTimeFormat("en-US-u-ca-persian-nu-latn",{
+    year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+  }).formatToParts(date);
+  const g = t => (parts.find(p => p.type === t) || {}).value || "00";
+  let h = g("hour"); if (h === "24") h = "00";
+  return `${g("year")}.${g("month")}.${g("day")}.${h}.${g("minute")}`;
+}
+
+/* ---------- ذخیره در مرورگر (IndexedDB) ---------- */
+let dbp = null;
+function idb(){
+  if (dbp) return dbp;
+  dbp = new Promise((res, rej) => {
+    try{
+      const r = indexedDB.open("my-recorder", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("files",{keyPath:"id"});
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }catch(e){ rej(e); }
+  });
+  return dbp;
+}
+async function dbAll(){
+  try{ const d = await idb(); return await new Promise((res,rej)=>{const q=d.transaction("files").objectStore("files").getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>rej(q.error);}); }
+  catch(e){ return null; }
+}
+async function dbPut(rec){
+  try{ const d = await idb(); await new Promise((res,rej)=>{const t=d.transaction("files","readwrite");t.objectStore("files").put(rec);t.oncomplete=res;t.onerror=()=>rej(t.error);}); return true; }
+  catch(e){ return false; }
+}
+async function dbDel(id){
+  try{ const d = await idb(); await new Promise((res,rej)=>{const t=d.transaction("files","readwrite");t.objectStore("files").delete(id);t.oncomplete=res;t.onerror=()=>rej(t.error);}); }catch(e){}
+}
+
+/* ---------- ZIP ساده (برای دانلود در claude.ai) ---------- */
+const crcTable = (()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=crcTable[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+async function makeZip(entries){ // [{name, blob}]
+  const enc = new TextEncoder(); const chunks = []; const central = []; let offset = 0;
+  for (const e of entries){
+    const data = new Uint8Array(await e.blob.arrayBuffer());
+    const name = enc.encode(e.name); const crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true); lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true);
+    lh.setUint32(22,data.length,true); lh.setUint16(26,name.length,true);
+    chunks.push(lh.buffer, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true);
+    ch.setUint16(28,name.length,true); ch.setUint32(42,offset,true);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length;
+  }
+  const csize = central.reduce((s,c)=>s+(c.byteLength||c.length),0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,entries.length,true); end.setUint16(10,entries.length,true);
+  end.setUint32(12,csize,true); end.setUint32(16,offset,true);
+  return new Blob([...chunks,...central,end.buffer],{type:"application/zip"});
+}
+
+/* ---------- دانلود ---------- */
+let downloadsP = (window.claude && window.claude.use) ? window.claude.use("downloads").catch(()=>null) : Promise.resolve(null);
+async function saveFile(name, blob){
+  const dl = await downloadsP;
+  if (dl){
+    // claude.ai فایل mp3 را مستقیم نمی‌پذیرد؛ داخل zip تحویل می‌دهیم
+    const zip = await makeZip([{name, blob}]);
+    try{ await dl.save({filename: name.replace(/\.mp3$/,"") + ".zip", data: zip}); }
+    catch(e){ if (e && e.code !== "declined") showErr("دانلود انجام نشد: " + (e.message||e.code)); }
+  } else {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  }
+}
+
+/* ---------- ضبط و تبدیل به MP3 ---------- */
+let ctx=null, stream=null, src=null, proc=null, enc=null, mp3Chunks=[], segStart=null, segSamples=0, recStart=null, recording=false, wakeLock=null, tick=null;
+const KBPS = 96;
+
+function newEncoder(){
+  enc = new lamejs.Mp3Encoder(1, ctx.sampleRate, KBPS);
+  mp3Chunks = []; segSamples = 0; segStart = new Date();
+  $("nowname").textContent = jalaliName(segStart) + ".mp3";
+}
+async function finishSegment(){
+  if (!enc) return;
+  const e = enc, chunks = mp3Chunks, start = segStart, samples = segSamples, rate = ctx.sampleRate;
+  enc = null; mp3Chunks = []; segSamples = 0;
+  const tail = e.flush(); if (tail.length) chunks.push(new Uint8Array(tail));
+  if (samples > 0){
+    const blob = new Blob(chunks,{type:"audio/mpeg"});
+    const rec = { id: start.getTime(), name: jalaliName(start)+".mp3", blob, seconds: samples/rate, size: blob.size };
+    const ok = await dbPut(rec);
+    if (!ok) memFiles.push(rec);
+    renderList();
+  }
+}
+function segLimitSamples(){ return Number($("seglen").value) * 60 * ctx.sampleRate; }
+
+async function start(){
+  hideErr();
+  if (typeof lamejs === "undefined"){ showErr("کتابخانه تبدیل MP3 بارگذاری نشد. اتصال اینترنت را بررسی و صفحه را دوباره باز کنید."); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    showErr("این صفحه در محیطی باز شده که مرورگر اجازه میکروفون به آن نمی‌دهد (آدرس فعلی: " + location.protocol + "). فایل را مستقیم در کروم باز کنید یا روی یک آدرس https قرار دهید.");
+    return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
+  }catch(e){
+    const n = (e && e.name) || "Error";
+    const why = {
+      NotAllowedError:"مرورگر یا محیط صفحه اجازه میکروفون را رد کرد. اگر صفحه داخل برنامه دیگری باز است، آن را در خود کروم باز کنید و روی آیکون قفل کنار آدرس، میکروفون را روی «اجازه» بگذارید.",
+      NotFoundError:"هیچ میکروفونی پیدا نشد. اتصال میکروفون یا هدست را بررسی کنید.",
+      NotReadableError:"میکروفون در اختیار برنامه دیگری است (مثلاً تماس یا ضبط دیگر). آن برنامه را ببندید و دوباره امتحان کنید.",
+      OverconstrainedError:"تنظیمات درخواستی میکروفون پشتیبانی نمی‌شود.",
+      SecurityError:"به دلایل امنیتی، میکروفون در این آدرس مجاز نیست. صفحه را روی https باز کنید."
+    }[n];
+    if (n === "OverconstrainedError"){
+      try{ stream = await navigator.mediaDevices.getUserMedia({audio:true}); }catch(e2){ showErr(why + " (" + n + ")"); return; }
+    } else {
+      showErr((why || "خطای ناشناخته در دسترسی به میکروفون.") + " (کد خطا: " + n + ")");
+      return;
+    }
+  }
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  src = ctx.createMediaStreamSource(stream);
+  proc = ctx.createScriptProcessor(4096,1,1);
+  const sink = ctx.createGain(); sink.gain.value = 0;
+  src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+  newEncoder();
+  proc.onaudioprocess = ev => {
+    if (!recording || !enc) return;
+    const f = ev.inputBuffer.getChannelData(0);
+    const pcm = new Int16Array(f.length); let peak = 0;
+    for (let i=0;i<f.length;i++){ const s=Math.max(-1,Math.min(1,f[i])); pcm[i]=s<0?s*0x8000:s*0x7FFF; const a=Math.abs(s); if(a>peak)peak=a; }
+    const out = enc.encodeBuffer(pcm); if (out.length) mp3Chunks.push(new Uint8Array(out));
+    segSamples += f.length;
+    $("ring").style.setProperty("--lvl", Math.min(1, Math.sqrt(peak)).toFixed(3));
+    if (segSamples >= segLimitSamples()){ finishSegment(); newEncoder(); }
+  };
+  recording = true; recStart = Date.now();
+  document.body.classList.add("recording"); $("deck").classList.add("recording");
+  $("recbtn").setAttribute("aria-label","توقف ضبط");
+  $("state").textContent = "در حال ضبط…";
+  $("splitbtn").disabled = false;
+  tick = setInterval(updateClock, 500);
+  try{ if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+}
+async function stop(){
+  recording = false;
+  clearInterval(tick);
+  await finishSegment();
+  try{ proc && proc.disconnect(); src && src.disconnect(); }catch(e){}
+  stream && stream.getTracks().forEach(t=>t.stop());
+  try{ ctx && await ctx.close(); }catch(e){}
+  try{ wakeLock && await wakeLock.release(); }catch(e){} wakeLock=null;
+  $("deck").classList.remove("recording");
+  $("recbtn").setAttribute("aria-label","شروع ضبط");
+  $("state").textContent = "ضبط متوقف شد و فایل ذخیره شد";
+  $("splitbtn").disabled = true;
+  $("ring").style.setProperty("--lvl", 0);
+  $("nowname").textContent = jalaliName(new Date()) + ".mp3";
+}
+function updateClock(){
+  const s = Math.floor((Date.now()-recStart)/1000);
+  const p = n => String(n).padStart(2,"0");
+  $("elapsed").textContent = `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}`;
+}
+$("recbtn").addEventListener("click", ()=> recording ? stop() : start());
+$("splitbtn").addEventListener("click", ()=>{ if(!recording) return; finishSegment(); newEncoder(); });
+document.addEventListener("visibilitychange", async ()=>{ if (recording && document.visibilityState==="visible" && "wakeLock" in navigator){ try{ wakeLock = await navigator.wakeLock.request("screen"); }catch(e){} } });
+
+/* ---------- فهرست فایل‌ها ---------- */
+const memFiles = [];
+const urls = new Map();
+function fmtDur(sec){ sec=Math.round(sec); const m=Math.floor(sec/60), s=sec%60; return m ? `${fa(m)} دقیقه و ${fa(s)} ثانیه` : `${fa(s)} ثانیه`; }
+function fmtSize(b){ return b>1048576 ? fa((b/1048576).toFixed(1))+" مگابایت" : fa(Math.max(1,Math.round(b/1024)))+" کیلوبایت"; }
+async function renderList(){
+  const stored = await dbAll();
+  const files = [...(stored||[]), ...memFiles].sort((a,b)=>b.id-a.id);
+  const ul = $("list"); ul.textContent = "";
+  $("count").textContent = files.length ? fa(files.length)+" فایل" : "";
+  if (!files.length){ const li=document.createElement("li"); li.className="empty"; li.textContent="هنوز فایلی ضبط نشده. بعد از توقف ضبط یا رسیدن به پایان هر ساعت، فایل اینجا می‌آید."; ul.appendChild(li); return; }
+  for (const f of files){
+    const li = document.createElement("li"); li.className="file";
+    const n = document.createElement("div"); n.className="fname"; n.textContent=f.name;
+    const m = document.createElement("div"); m.className="meta"; m.textContent = fmtDur(f.seconds)+"، "+fmtSize(f.size);
+    if (!urls.has(f.id)) urls.set(f.id, URL.createObjectURL(f.blob));
+    const au = document.createElement("audio"); au.controls=true; au.preload="none"; au.src=urls.get(f.id);
+    const act = document.createElement("div"); act.className="actions";
+    const d = document.createElement("button"); d.className="ghost"; d.textContent="دانلود"; d.onclick=()=>saveFile(f.name,f.blob);
+    const x = document.createElement("button"); x.className="ghost"; x.textContent="حذف";
+    x.onclick=async()=>{ if(!confirm("فایل "+f.name+" حذف شود؟")) return; await dbDel(f.id); const i=memFiles.findIndex(r=>r.id===f.id); if(i>=0)memFiles.splice(i,1); URL.revokeObjectURL(urls.get(f.id)); urls.delete(f.id); renderList(); };
+    act.append(d,x);
+    li.append(n,m,au,act); ul.appendChild(li);
+  }
+}
+function showErr(t){ const e=$("err"); e.textContent=t; e.hidden=false; }
+function hideErr(){ $("err").hidden=true; }
+
+$("nowname").textContent = jalaliName(new Date()) + ".mp3";
+setInterval(()=>{ if(!recording) $("nowname").textContent = jalaliName(new Date()) + ".mp3"; }, 15000);
+renderList();
+})();
+</script>
+</body>
+</html>
